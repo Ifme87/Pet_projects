@@ -71,13 +71,13 @@ def resolve_ip(node, ips_to_resolve):
 	for ip in ips_to_resolve:
 		domain_name = subprocess.run([f'host {ip}'], shell=True, stdout=subprocess.PIPE, encoding='utf-8')
 		time.sleep(0.1)
-		lo0 = subprocess.run([f'grep "lo0 ipaddress" {directory}'], shell=True, stdout=subprocess.PIPE, encoding='utf-8')
 		match_dn = re.match(regex_name, domain_name.stdout)
-		match_lo0 = re.match(regex_lo0, lo0.stdout)
 		if match_dn:
-			hops3.append(f'{match_dn.group(1)}, ip {ip}, lo0 no')
+			lo0 = subprocess.run([f'grep "lo0 ipaddress" /work/netconf/save/{match_dn.group(1)}.cfg'], shell=True, stdout=subprocess.PIPE, encoding='utf-8')
+			match_lo0 = re.match(regex_lo0, lo0.stdout)
+			hops3.append(f'{match_dn.group(1)}, ip {ip}, lo0 {match_lo0.group(1)}')
 		else:
-			hops3.append(f'no name, ip {ip}, lo0 no')
+			hops3.append(f'no name, ip {ip}, lo0 {match_lo0.group(1)}')
 	return hops3
 	
 
