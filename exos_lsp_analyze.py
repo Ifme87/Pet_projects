@@ -8,11 +8,11 @@ from pprint import pprint
 
 
 def vpn(node, vpn_name):
+	directory = f'~/Downloads/{node}.cfg'
 	'''regular expressions'''
 	regex_ip = re.compile('.*peer ((\w+.){3}(\w+))')
 	regex_lsp = re.compile('.* lsp "(\S+)" .*')
 	'''looking for all peers of vpn'''
-	directory = f'~/Downloads/{node}.cfg'
 	peers = subprocess.run([f'grep "l2vpn.*{vpn_name}.*peer" {directory}'], shell=True, stdout=subprocess.PIPE, encoding='utf-8')
 	peers = peers.stdout.split('\n')
 	lsps_of_vpn = []
@@ -32,8 +32,8 @@ def vpn(node, vpn_name):
 
 
 def lsp(node, lsp_name):
-	regex_path = re.compile('.*add path "*(\S+?)"* .*')
 	directory = f'~/Downloads/{node}.cfg'
+	regex_path = re.compile('.*add path "*(\S+?)"* .*')
 	out = subprocess.run([f'grep "rsvp-te.*add path" {directory} | grep {lsp_name}'], shell=True, stdout=subprocess.PIPE, encoding='utf-8')	
 	out = out.stdout.split('\n')
 	paths = []
@@ -51,8 +51,8 @@ def lsp(node, lsp_name):
 
 	
 def path(node, path_name):
-	regex_hops = re.compile('.*ero include ((\w+.){3}(\w+))\/(\w+) .*(order \w+)')
 	directory = f'~/Downloads/{node}.cfg'
+	regex_hops = re.compile('.*ero include ((\w+.){3}(\w+))\/(\w+) .*(order \w+)')
 	hops2 = subprocess.run([f'grep "rsvp-te.*add ero" {directory} | grep {path_name}'], shell=True, stdout=subprocess.PIPE, encoding='utf-8')
 	hops2 = hops2.stdout.split('\n')
 	ips = []
@@ -60,21 +60,24 @@ def path(node, path_name):
 		match = re.match(regex_hops, ip)
 		if match:
 			ips.append(match.group(1))
-	return resolve_ip(ips)
+	return resolve_ip(node, ips)
 	
 		
-def resolve_ip(ips_to_resolve):
+def resolve_ip(node, ips_to_resolve):
+	directory = f'~/Downloads/{node}.cfg'
 	regex_name = re.compile('.*pointer (\S+?-\S+?-\S+?..)')
+	regex_lo0 = re.compile('.*lo0 ipaddress ((\w+.){3}(\w+)).*')
 	hops3 = []			
 	for ip in ips_to_resolve:
 		domain_name = subprocess.run([f'host {ip}'], shell=True, stdout=subprocess.PIPE, encoding='utf-8')
-		time.sleep(0.5)
-		match = re.match(regex_name, domain_name.stdout)
-		if match:
-			hops3.append(f'{match.group(1)} ip {ip}')
+		time.sleep(0.1)
+		lo0 = subprocess.run([f'grep "lo0 ipaddress" {directory}'], shell=True, stdout=subprocess.PIPE, encoding='utf-8')
+		match_dn = re.match(regex_name, domain_name.stdout)
+		match_lo0 = re.match(regex_lo0, lo0.stdout)
+		if match_dn:
+			hops3.append(f'{match_dn.group(1)}, ip {ip}, lo0 no')
 		else:
-			'''add name resolving for grey ips'''
-			hops3.append(ip)
+			hops3.append(f'no name, ip {ip}, lo0 no')
 	return hops3
 	
 
@@ -85,7 +88,21 @@ if __name__ == "__main__":
 		-paths
 		and hops resolving
 	'''
-	pprint(vpn('spb-ivc-ts3', 'OTN_1284'))
-	#pprint(lsp('spb-ivc-ts3', 'ivcts3_frmntts2'))
-	#pprint(path('spb-ivc-ts3', 'path_163_hs2_2_7_26_22'))
-	#pprint(resolve_ip('spb-ivc-ts3', 'path_163_hs2_2_7_26_22'))
+	#make keys option to choose vpn/lsp/path/hop obj
+	#add hop ip and lo0 ip info when resolving
+	#check vpn section (too slow)
+	#add extended mode (to check ldp)
+	
+	node = sys.argv[1]
+	obj_for_analisys = sys.argv[2]
+	obj_name = sys.argv[3]
+
+	
+	if obj_for_analisys == 'v':
+		pprint(vpn(node, obj_name), width=120)
+	if obj_for_analisys == 'l':
+		pprint(lsp(node, obj_name), width=120)
+	if obj_for_analisys == 'p':
+		pprint(path(node, obj_name), width=120)
+	if obj_for_analisys == 'h':
+		pprint(resolve_ip(node, obj_name), width=120)
