@@ -99,6 +99,7 @@ if __name__ == "__main__":
 	#check vpn section (too slow)
 	#add extended mode (to check ldp)
 	#add cisco and juniper
+	#add version "all lsps"
  	
 	node = sys.argv[1]
 	obj_for_analisys = sys.argv[2]
