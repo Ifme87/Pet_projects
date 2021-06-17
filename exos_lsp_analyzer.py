@@ -108,20 +108,17 @@ if __name__ == "__main__":
 		-'v' is for VPN
 		-'l' is for LSP
 		-'p' is for PATH
-	Arf 3: Object name
-	Names should be FULL
-	==============================
-	-check vpn section (too long)
-	-add extended mode (to check ldp)
-	-add cisco and juniper
-	-add option 'all lsps/paths'
+	Arg 3: Object name
+	
+	Names should be FULL!
 	'''
 	
-	''' nodes dir '''
+	'''Node configs dir: '''
 	node = ''
 	#directory = '/work/netconf/save/'
 	directory = '~/Downloads/'
-	 
+	'''End'''
+	
 	node = sys.argv[1]
 	obj_for_analisys = sys.argv[2]
 	obj_name = sys.argv[3]
@@ -129,18 +126,19 @@ if __name__ == "__main__":
 	
 	if obj_for_analisys == 'v':
 		if obj_name == 'a':
+			pass
 			print("Key 'all' for LSPs and PATHs only ")
 		else:
 			pprint(vpn(node, obj_name), width=120)
 	if obj_for_analisys == 'l':
 		if obj_name == 'a':
 			pass
-			#make 'all' option
+			#add 'all' option
 		else:
 			pprint(lsp(node, obj_name), width=120)
 	if obj_for_analisys == 'p':
 		if obj_name == 'a':
 			pass
-			#make all option
+			#add all option
 		else:
 			pprint(path(node, obj_name), width=120)
