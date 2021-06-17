@@ -6,32 +6,33 @@ import re
 import time
 from pprint import pprint
 
-#/work/netconf/save/
-
 def vpn(node, vpn_name):
-	directory = f'~/Downloads/{node}.cfg'
 	'''regular expressions'''
 	regex_ip = re.compile('.*peer ((\w+.){3}(\w+))')
 	regex_lsp = re.compile('.* lsp "(\S+)" .*')
 	'''generate strings with peers of VPN'''
-	peers = subprocess.run([f'grep " l2vpn.* {vpn_name} .*peer" {directory}'], shell=True, stdout=subprocess.PIPE, encoding='utf-8')
+	peers = subprocess.run([f'grep " l2vpn.* {vpn_name} .*peer" {directory}{node}.cfg'], shell=True, stdout=subprocess.PIPE, encoding='utf-8')
 	peers = peers.stdout.split('\n')
 	'''eject dest IPs from strings'''
-	dest_ips_of_vpn = []
+	dest_ips_of_vpn = set()
 	for i in peers:
 		match_peer = re.match(regex_ip, i)
 		if match_peer:
-			dest_ips_of_vpn.append(match_peer.group(1))
-	dest_ips_of_vpn = set(dest_ips_of_vpn)
+			dest_ips_of_vpn.add(match_peer.group(1))
 	'''resolve unique dest IPs into LSPs'''
 	lsps_of_vpn = []
 	for dest_ip in dest_ips_of_vpn:
-		out = subprocess.run([f'grep "rsvp-te.*destin" {directory} | grep "{dest_ip}"'], shell=True, stdout=subprocess.PIPE, encoding='utf-8')
+		out = subprocess.run([f'grep "rsvp-te.*destin" {directory}{node}.cfg | grep "{dest_ip}"'], shell=True, stdout=subprocess.PIPE, encoding='utf-8')
+		if not out.stdout:
+			print(f'Destination {dest_ip} via LDP')
+			continue
 		out = out.stdout.split('\n')
 		for lsp_vpn in out:
 			match_lsp = re.match(regex_lsp, lsp_vpn)
 			if match_lsp and transport_check(match_lsp.group(1), vpn_name):
 				lsps_of_vpn.append(match_lsp.group(1))
+	if len(lsps_of_vpn) == 0:
+		exit()
 	'''generate tree of VPNs LSPs > PATHs > Hops'''
 	result_vpn = dict()
 	for lsps in lsps_of_vpn:
@@ -40,9 +41,8 @@ def vpn(node, vpn_name):
 
 '''check if lsp "transport vpn-traffic allow assigned-only"'''
 def transport_check(lsp_name, vpn_name):
-	directory = f'~/Downloads/{node}.cfg'
-	out = subprocess.run([f'grep \"{lsp_name}\" {directory} | grep "transport vpn"'], shell=True, stdout=subprocess.PIPE, encoding='utf-8')	
-	out2 = subprocess.run([f'grep {vpn_name} {directory} | grep "add mpls lsp {lsp_name}"'], shell=True, stdout=subprocess.PIPE, encoding='utf-8')	
+	out = subprocess.run([f'grep \"{lsp_name}\" {directory}{node}.cfg | grep "transport vpn"'], shell=True, stdout=subprocess.PIPE, encoding='utf-8')	
+	out2 = subprocess.run([f'grep {vpn_name} {directory}{node}.cfg | grep "add mpls lsp {lsp_name}"'], shell=True, stdout=subprocess.PIPE, encoding='utf-8')	
 	if out.stdout and not out2.stdout:
 		return False
 	else:
@@ -50,10 +50,9 @@ def transport_check(lsp_name, vpn_name):
 		
 		
 def lsp(node, lsp_name):
-	directory = f'~/Downloads/{node}.cfg'
 	regex_path = re.compile('.*add path "*(\S+?)"* .*')
 	'''generate strings with LSP'''
-	out = subprocess.run([f'grep \"{lsp_name}\" {directory}'], shell=True, stdout=subprocess.PIPE, encoding='utf-8')	
+	out = subprocess.run([f'grep \"{lsp_name}\" {directory}{node}.cfg'], shell=True, stdout=subprocess.PIPE, encoding='utf-8')	
 	out = out.stdout.split('\n')
 	'''eject PATH names from strings'''
 	paths = []
@@ -72,9 +71,8 @@ def lsp(node, lsp_name):
 
 	
 def path(node, path_name):
-	directory = f'~/Downloads/{node}.cfg'
 	regex_hops = re.compile('.*ero include ((\w+.){3}(\w+))\/(\w+) .*(order \w+)')
-	hops_path = subprocess.run([f'grep " rsvp-te.*add ero " {directory} | grep " {path_name} "'], shell=True, stdout=subprocess.PIPE, encoding='utf-8')
+	hops_path = subprocess.run([f'grep " rsvp-te.*add ero " {directory}{node}.cfg | grep " {path_name} "'], shell=True, stdout=subprocess.PIPE, encoding='utf-8')
 	hops_path = hops_path.stdout.split('\n')
 	hops_to_resolve = []
 	for hop in hops_path:	
@@ -85,7 +83,6 @@ def path(node, path_name):
 	
 		
 def resolve_ip(node, ips_to_resolve):
-	directory = f'~/Downloads/{node}.cfg'
 	regex_name = re.compile('.*pointer (\S+?-\S+?-\S+?..)')
 	regex_lo0 = re.compile('.*lo0 ipaddress ((\w+.){3}(\w+)).*')
 	hops_resolved = []			
@@ -94,7 +91,7 @@ def resolve_ip(node, ips_to_resolve):
 		time.sleep(0.1)
 		match_dn = re.match(regex_name, domain_name.stdout)
 		if match_dn:
-			lo0 = subprocess.run([f'grep "lo0 ipaddress" ~/Downloads/{match_dn.group(1)}.cfg'], shell=True, stdout=subprocess.PIPE, encoding='utf-8')
+			lo0 = subprocess.run([f'grep "lo0 ipaddress" {directory}{match_dn.group(1)}.cfg'], shell=True, stdout=subprocess.PIPE, encoding='utf-8')
 			match_lo0 = re.match(regex_lo0, lo0.stdout)
 			hops_resolved.append(f'{match_dn.group(1)}, hop {ip}, lo0 {match_lo0.group(1)}')
 		else:
@@ -119,6 +116,11 @@ if __name__ == "__main__":
 	-add cisco and juniper
 	-add option 'all lsps/paths'
 	'''
+	
+	''' nodes dir '''
+	node = ''
+	#directory = '/work/netconf/save/'
+	directory = '~/Downloads/'
 	 
 	node = sys.argv[1]
 	obj_for_analisys = sys.argv[2]
