@@ -6,38 +6,47 @@ import re
 import time
 from pprint import pprint
 
-def vpn(node, vpn_name):
+
+def vpn_or_all(node, vpn_name):
 	'''regular expressions'''
-	regex_ip = re.compile('.*peer ((\w+.){3}(\w+))')
+	regex_ip = re.compile('.* (peer|destination) ((\w+.){3}(\w+))')
 	regex_lsp = re.compile('.* lsp "(\S+)" .*')
-	'''generate strings with peers of VPN'''
-	peers = subprocess.run([f'grep " l2vpn.* {vpn_name} .*peer" {directory}{node}.cfg'], shell=True, stdout=subprocess.PIPE, encoding='utf-8')
-	peers = peers.stdout.split('\n')
+	if vpn_name == 'a':
+		'''generate strings with all peers'''
+		peers = subprocess.run([f'grep "rsvp-te.*destin" {directory}{node}.cfg'], shell=True, stdout=subprocess.PIPE, encoding='utf-8')
+		peers = peers.stdout.split('\n')
+	else:
+		'''generate strings with peers of VPN'''
+		peers = subprocess.run([f'grep " l2vpn.* {vpn_name} .*peer" {directory}{node}.cfg'], shell=True, stdout=subprocess.PIPE, encoding='utf-8')
+		peers = peers.stdout.split('\n')
 	'''eject dest IPs from strings'''
-	dest_ips_of_vpn = set()
+	destination_ips = set()
 	for i in peers:
 		match_peer = re.match(regex_ip, i)
 		if match_peer:
-			dest_ips_of_vpn.add(match_peer.group(1))
+			destination_ips.add(match_peer.group(2))
 	'''resolve unique dest IPs into LSPs'''
-	lsps_of_vpn = []
-	for dest_ip in dest_ips_of_vpn:
+	lsps = []
+	for dest_ip in destination_ips:
 		out = subprocess.run([f'grep "rsvp-te.*destin" {directory}{node}.cfg | grep "{dest_ip}"'], shell=True, stdout=subprocess.PIPE, encoding='utf-8')
 		if not out.stdout:
 			print(f'Destination {dest_ip} via LDP')
 			continue
 		out = out.stdout.split('\n')
-		for lsp_vpn in out:
-			match_lsp = re.match(regex_lsp, lsp_vpn)
-			if match_lsp and transport_check(match_lsp.group(1), vpn_name):
-				lsps_of_vpn.append(match_lsp.group(1))
-	if len(lsps_of_vpn) == 0:
+		for lsp_string in out:
+			match_lsp = re.match(regex_lsp, lsp_string)
+			if vpn_name == 'a' and match_lsp: 
+				lsps.append(match_lsp.group(1))
+			elif match_lsp and transport_check(match_lsp.group(1), vpn_name):
+				lsps.append(match_lsp.group(1))
+	if len(lsps) == 0:
 		exit()
 	'''generate tree of VPNs LSPs > PATHs > Hops'''
-	result_vpn = dict()
-	for lsps in lsps_of_vpn:
-		result_vpn.update(lsp(node, lsps))
-	return result_vpn
+	res_lsps = dict()
+	for res_lsp in lsps:
+		res_lsps.update(lsp(node, res_lsp))
+	return res_lsps
+
 
 '''check if lsp "transport vpn-traffic allow assigned-only"'''
 def transport_check(lsp_name, vpn_name):
@@ -105,9 +114,10 @@ if __name__ == "__main__":
 	
 	Arg 1: Switch name
 	Arg 2: Analysed object
-		-'v' is for VPN
-		-'l' is for LSP
-		-'p' is for PATH
+		-'a' is for all LSPs analysis
+ 		-'v' is for VPN analysis
+		-'l' is for LSP analysis
+		-'p' is for PATH analysis
 	Arg 3: Object name
 	
 	Names should be FULL!
@@ -121,24 +131,14 @@ if __name__ == "__main__":
 	
 	node = sys.argv[1]
 	obj_for_analisys = sys.argv[2]
-	obj_name = sys.argv[3]
+	if not obj_for_analisys == 'a':
+		obj_name = sys.argv[3]
 
-	
+	if obj_for_analisys == 'a':
+		pprint(vpn_or_all(node, 'a'), width=120)
 	if obj_for_analisys == 'v':
-		if obj_name == 'a':
-			pass
-			print("Key 'all' for LSPs and PATHs only ")
-		else:
-			pprint(vpn(node, obj_name), width=120)
+		pprint(vpn_or_all(node, obj_name), width=120)
 	if obj_for_analisys == 'l':
-		if obj_name == 'a':
-			pass
-			#add 'all' option
-		else:
-			pprint(lsp(node, obj_name), width=120)
+		pprint(lsp(node, obj_name), width=120)
 	if obj_for_analisys == 'p':
-		if obj_name == 'a':
-			pass
-			#add all option
-		else:
-			pprint(path(node, obj_name), width=120)
+		pprint(path(node, obj_name), width=120)
