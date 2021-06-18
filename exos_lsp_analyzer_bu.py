@@ -3,7 +3,7 @@
 import subprocess
 import sys
 import re
-#import time
+import time
 from pprint import pprint
 
 
@@ -25,25 +25,27 @@ def vpn_or_all(node, vpn_name):
 		match_peer = re.match(regex_ip, i)
 		if match_peer:
 			destination_ips.add(match_peer.group(2))
-	'''resolve unique dest IPs into LSPs and generate tree for VPN'''
-	res_lsps = {}
-	for destination_ip in destination_ips:
-		global dest_ip
-		dest_ip = destination_ip
+	'''resolve unique dest IPs into LSPs'''
+	lsps = []
+	for dest_ip in destination_ips:
 		out = subprocess.run([f'grep "rsvp-te.*destin" {directory}{node}.cfg | grep "{dest_ip}"'], shell=True, stdout=subprocess.PIPE, encoding='utf-8')
 		if not out.stdout:
 			print(f'Destination {dest_ip} via LDP')
 			continue
 		out = out.stdout.split('\n')
-		'''generate tree for VPN'''
 		for lsp_string in out:
 			match_lsp = re.match(regex_lsp, lsp_string)
 			if vpn_name == 'a' and match_lsp: 
-				res_lsps.update(lsp(node, match_lsp.group(1)))
+				lsps.append(match_lsp.group(1))
 			elif match_lsp and transport_check(match_lsp.group(1), vpn_name, dest_ip):
-				res_lsps.update(lsp(node, match_lsp.group(1)))
-	if res_lsps:
-		return res_lsps			
+				lsps.append(match_lsp.group(1))
+	if len(lsps) == 0:
+		exit()
+	'''generate tree of VPNs LSPs > PATHs > Hops'''
+	res_lsps = {}
+	for res_lsp in lsps:
+		res_lsps.update(lsp(node, res_lsp))
+	return res_lsps
 
 
 '''check if lsp "transport vpn-traffic allow assigned-only"'''
@@ -79,7 +81,7 @@ def lsp(node, lsp_name):
 		hops = path(node, path1)
 		result[path1] = hops
 	lsp_res = {}
-	lsp_res[dest_ip + ', ' + lsp_name] = result	
+	lsp_res[lsp_name] = result	
 	return lsp_res
 
 	
@@ -101,7 +103,7 @@ def resolve_ip(node, ips_to_resolve):
 	hops_resolved = []			
 	for ip in ips_to_resolve:
 		domain_name = subprocess.run([f'host {ip}'], shell=True, stdout=subprocess.PIPE, encoding='utf-8')
-		#time.sleep(0.1)
+		time.sleep(0.1)
 		match_dn = re.match(regex_name, domain_name.stdout)
 		if match_dn:
 			lo0 = subprocess.run([f'grep "lo0 ipaddress" {directory}{match_dn.group(1)}.cfg'], shell=True, stdout=subprocess.PIPE, encoding='utf-8')
