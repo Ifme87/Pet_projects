@@ -25,58 +25,62 @@ def vpn_or_all(node, vpn_name):
 		match_peer = re.match(regex_ip, i)
 		if match_peer:
 			destination_ips.add(match_peer.group(2))
-	'''resolve unique dest IPs into LSPs'''
-	lsps = []
-	for dest_ip in destination_ips:
+	'''resolve unique dest IPs into LSPs and generate tree for VPN'''
+	res_lsps = {}
+	for destination_ip in destination_ips:
+		global dest_ip
+		dest_ip = destination_ip
 		out = subprocess.run([f'grep "rsvp-te.*destin" {directory}{node}.cfg | grep "{dest_ip}"'], shell=True, stdout=subprocess.PIPE, encoding='utf-8')
 		if not out.stdout:
 			print(f'Destination {dest_ip} via LDP')
 			continue
 		out = out.stdout.split('\n')
+		'''generate tree for VPN'''
 		for lsp_string in out:
 			match_lsp = re.match(regex_lsp, lsp_string)
 			if vpn_name == 'a' and match_lsp: 
-				lsps.append(match_lsp.group(1))
-			elif match_lsp and transport_check(match_lsp.group(1), vpn_name):
-				lsps.append(match_lsp.group(1))
-	if len(lsps) == 0:
-		exit()
-	'''generate tree of VPNs LSPs > PATHs > Hops'''
-	res_lsps = dict()
-	for res_lsp in lsps:
-		res_lsps.update(lsp(node, res_lsp))
-	return res_lsps
+				res_lsps.update(lsp(node, match_lsp.group(1)))
+			elif match_lsp and transport_check(match_lsp.group(1), vpn_name, dest_ip):
+				res_lsps.update(lsp(node, match_lsp.group(1)))
+	if res_lsps:
+		return res_lsps			
 
 
 '''check if lsp "transport vpn-traffic allow assigned-only"'''
-def transport_check(lsp_name, vpn_name):
-	out = subprocess.run([f'grep \"{lsp_name}\" {directory}{node}.cfg | grep "transport vpn"'], shell=True, stdout=subprocess.PIPE, encoding='utf-8')	
-	out2 = subprocess.run([f'grep {vpn_name} {directory}{node}.cfg | grep "add mpls lsp {lsp_name}"'], shell=True, stdout=subprocess.PIPE, encoding='utf-8')	
-	if out.stdout and not out2.stdout:
+def transport_check(lsp_name, vpn_name, dest_ip):
+	condition1 = subprocess.run([f'grep "\\"{lsp_name}\\"" {directory}{node}.cfg | grep "transport vpn"'], shell=True, stdout=subprocess.PIPE, encoding='utf-8')	
+	condition2 = subprocess.run([f'grep \" {vpn_name} \" {directory}{node}.cfg | grep "{dest_ip} add mpls lsp {lsp_name}$"'], shell=True, stdout=subprocess.PIPE, encoding='utf-8')
+	condition3 = subprocess.run([f'grep \" {vpn_name} \" {directory}{node}.cfg | grep "{dest_ip} add mpls lsp"'], shell=True, stdout=subprocess.PIPE, encoding='utf-8')
+	if condition1.stdout and not condition2.stdout:
+		return False
+	elif not condition1.stdout and not condition2.stdout and condition3.stdout:
 		return False
 	else:
 		return True
 		
 		
 def lsp(node, lsp_name):
-	regex_path = re.compile('.*add path "*(\S+?)"* .*')
+	regex_path = re.compile('.*add path "*(\S+?)"* (\S+)')
 	'''generate strings with LSP'''
-	out = subprocess.run([f'grep \"{lsp_name}\" {directory}{node}.cfg'], shell=True, stdout=subprocess.PIPE, encoding='utf-8')	
+	out = subprocess.run([f'grep "\\"{lsp_name}\\"" {directory}{node}.cfg'], shell=True, stdout=subprocess.PIPE, encoding='utf-8')
 	out = out.stdout.split('\n')
 	'''eject PATH names from strings'''
 	paths = []
 	for path1 in out:
 		match = re.match(regex_path, path1)
 		if match:
-			paths.append(match.group(1))
+			if match.group(2) == 'primary':
+				paths.append('*' + match.group(1))
+			else:
+				paths.append(match.group(1))
 	'''generate tree LSPs > PATHs > hops'''
 	result = {}
 	for path1 in paths:
 		hops = path(node, path1)
 		result[path1] = hops
-	lsp = {}
-	lsp[lsp_name] = result	
-	return lsp
+	lsp_res = {}
+	lsp_res[dest_ip + ', ' + lsp_name] = result	
+	return lsp_res
 
 	
 def path(node, path_name):
