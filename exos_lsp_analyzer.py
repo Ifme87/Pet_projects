@@ -3,7 +3,6 @@
 import subprocess
 import sys
 import re
-#import time
 from pprint import pprint
 
 
@@ -28,7 +27,6 @@ def vpn_or_all(node, vpn_name):
 	'''resolve unique dest IPs into LSPs and generate tree for VPN'''
 	res_lsps = {}
 	for destination_ip in destination_ips:
-		global dest_ip
 		dest_ip = destination_ip
 		out = subprocess.run([f'grep "rsvp-te.*destin" {directory}{node}.cfg | grep "{dest_ip}"'], shell=True, stdout=subprocess.PIPE, encoding='utf-8')
 		if not out.stdout:
@@ -79,7 +77,7 @@ def lsp(node, lsp_name):
 		hops = path(node, path1)
 		result[path1] = hops
 	lsp_res = {}
-	lsp_res[dest_ip + ', ' + lsp_name] = result	
+	lsp_res[lsp_name] = result	
 	return lsp_res
 
 	
@@ -101,7 +99,6 @@ def resolve_ip(node, ips_to_resolve):
 	hops_resolved = []			
 	for ip in ips_to_resolve:
 		domain_name = subprocess.run([f'host {ip}'], shell=True, stdout=subprocess.PIPE, encoding='utf-8')
-		#time.sleep(0.1)
 		match_dn = re.match(regex_name, domain_name.stdout)
 		if match_dn:
 			lo0 = subprocess.run([f'grep "lo0 ipaddress" {directory}{match_dn.group(1)}.cfg'], shell=True, stdout=subprocess.PIPE, encoding='utf-8')
@@ -145,4 +142,4 @@ if __name__ == "__main__":
 	if obj_for_analisys == 'l':
 		pprint(lsp(node, obj_name), width=120)
 	if obj_for_analisys == 'p':
-		pprint(path(node, obj_name), width=120)
+		pprint(path(node, obj_name), width=80)
