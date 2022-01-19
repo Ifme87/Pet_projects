@@ -1,7 +1,8 @@
 import csv
 from pprint import pprint
 
-'''Сравнивает наличие hostname/ip из csv файла в файле hosts_tmp
+'''Сравнивает наличие hostname/ip из csv файла в файле hosts_tmp,
+    выводит результат, которого нет в hosts_tmp
 '''
 def parse_inventory(csv_file):
     with open(csv_file, encoding="utf-16", newline="") as f:
